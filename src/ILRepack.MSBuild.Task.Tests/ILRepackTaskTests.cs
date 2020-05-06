@@ -442,5 +442,69 @@ namespace ILRepack.MSBuild.Task.Tests
             }
         }
 
+        [Fact]
+        public void TestNonNullOutputDirectory()
+        {
+            var workingDirectory = _baseFixture.WorkingDirectory;
+
+            var ticks = DateTime.Now.Ticks;
+
+            var publicLibraryAssemblyDefinition = _baseFixture.BuildLibrary($"MyPublicLibrary{ticks}", "ThisClassShouldBePublic");
+            var internalLibraryAssemblyDefinition = _baseFixture.BuildLibrary($"MyInternalLibrary{ticks}", "ThisClassShouldBeInternal");
+            var ilRepackedAssemblyDefinition = _baseFixture.BuildLibrary($"MyILRepackedLibrary{ticks}", "ThisClassShouldAlsoBePublic");
+            var outputDirectory = "OutputDirectory";
+            var outputAssembly = ilRepackedAssemblyDefinition.GetRelativeFilename();
+            var outputAssemblyPath = Path.Combine(outputDirectory, outputAssembly);
+            using (_baseFixture.WithDisposableAssemblies(workingDirectory, publicLibraryAssemblyDefinition, internalLibraryAssemblyDefinition, ilRepackedAssemblyDefinition))
+            {
+                var task = new ILRepack
+                {
+                    FakeBuildEngine = new FakeBuildEngine(),
+                    OutputType = "Library",
+                    MainAssembly = ilRepackedAssemblyDefinition.GetRelativeFilename(),
+                    OutputAssembly = outputAssembly,
+                    OutputDirectory = outputDirectory,
+                    InputAssemblies = new List<ITaskItem>
+                    {
+                        new TaskItem("My*.dll"),
+                    }.ToArray(),
+                    WilcardInputAssemblies = true,
+                    WorkingDirectory = workingDirectory
+                };
+
+                Assert.True(task.Execute());
+
+                Assert.True(File.Exists(outputAssemblyPath));
+
+                using (ilRepackedAssemblyDefinition = AssemblyDefinition.ReadAssembly(outputAssemblyPath))
+                {
+                    Assert.NotNull(ilRepackedAssemblyDefinition);
+
+                    var references = ilRepackedAssemblyDefinition.MainModule.AssemblyReferences.ToList();
+                    Assert.Single(references);
+                    Assert.Equal("mscorlib", references[0].Name);
+
+                    var types = ilRepackedAssemblyDefinition.MainModule.Types.ToList();
+
+                    var thisClassShouldBePublic = types.SingleOrDefault(x => x.Namespace == publicLibraryAssemblyDefinition.MainModule.Name && x.Name == "ThisClassShouldBePublic");
+                    Assert.NotNull(thisClassShouldBePublic);
+                    Assert.False(thisClassShouldBePublic.IsPublic);
+
+                    var thisClassShouldBeInternal = types.SingleOrDefault(x => x.Namespace == internalLibraryAssemblyDefinition.MainModule.Name && x.Name == "ThisClassShouldBeInternal");
+                    Assert.NotNull(thisClassShouldBeInternal);
+                    Assert.False(thisClassShouldBeInternal.IsPublic);
+
+                    var thisClassShouldAlsoBePublic = types.SingleOrDefault(x => x.Namespace == ilRepackedAssemblyDefinition.MainModule.Name && x.Name == "ThisClassShouldAlsoBePublic");
+                    Assert.NotNull(thisClassShouldAlsoBePublic);
+                    Assert.True(thisClassShouldAlsoBePublic.IsPublic);
+                }
+
+            }
+            try
+            {
+                Directory.Delete(outputDirectory, true);
+            }
+            catch { }
+        }
     }
 }

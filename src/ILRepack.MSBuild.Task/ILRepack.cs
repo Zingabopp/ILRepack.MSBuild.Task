@@ -201,6 +201,11 @@ namespace ILRepack.MSBuild.Task
         }
 
         /// <summary>
+        /// Output directory for merged assembly.
+        /// </summary>
+        public virtual string OutputDirectory { get; set; }
+
+        /// <summary>
         /// List of assemblies that will be merged
         /// </summary>
         public virtual ITaskItem[] InputAssemblies { get; set; } = new ITaskItem[0];
@@ -278,13 +283,16 @@ namespace ILRepack.MSBuild.Task
                 return false;
             }
 
-            OutputAssembly = OutputAssembly == null ? null : Path.IsPathRooted(OutputAssembly) ? Path.GetFullPath(OutputAssembly) : Path.Combine(WorkingDirectory, Path.GetFileName(OutputAssembly));
+            OutputDirectory = string.IsNullOrEmpty(OutputDirectory) ?  Path.IsPathRooted(OutputAssembly) ? Path.GetDirectoryName(OutputAssembly) : WorkingDirectory : Path.GetFullPath(OutputDirectory);
+
             if (OutputAssembly == null)
             {
                 Log.LogError($"{nameof(ILRepack)}: Please specify a output assembly.");
                 return false;
             }
-            
+            else
+                OutputAssembly = Path.GetFileName(OutputAssembly);
+
             InputAssemblies = InputAssemblies ?? new ITaskItem[] { };
             InternalizeExcludeAssemblies = InternalizeExcludeAssemblies ?? new ITaskItem[] { };
 
@@ -390,7 +398,7 @@ namespace ILRepack.MSBuild.Task
                     AllowDuplicateResources = AllowDuplicateResources,
                     AllowZeroPeKind = ZeroPeKind,
                     Parallel = Parallel,
-                    OutputFile = _outputAssembly,
+                    OutputFile = Path.Combine(OutputDirectory, OutputAssembly),
                     AllowWildCards = WilcardInputAssemblies,
                     InputAssemblies = InputAssemblies.Select(x => x.ItemSpec.ToString()).Distinct().ToArray(),
                     SearchDirectories = new List<string> {WorkingDirectory},
@@ -405,7 +413,7 @@ namespace ILRepack.MSBuild.Task
                 Log.LogMessage(MessageImportance.High, $"{nameof(ILRepack)}: DebugInfo: {(DebugInfo ? "yes" : "no")}.");
                 Log.LogMessage(MessageImportance.High, $"{nameof(ILRepack)}: Working directory: {WorkingDirectory}.");
                 Log.LogMessage(MessageImportance.High, $"{nameof(ILRepack)}: Main assembly: {MainAssembly}.");
-                Log.LogMessage(MessageImportance.High, $"{nameof(ILRepack)}: Output assembly: {OutputAssembly}.");
+                Log.LogMessage(MessageImportance.High, $"{nameof(ILRepack)}: Output assembly: {repackOptions.OutputFile}.");
 
                 if (repackOptions.ExcludeInternalizeMatches.Count > 0)
                 {
@@ -418,7 +426,7 @@ namespace ILRepack.MSBuild.Task
                     WilcardInputAssemblies
                         ? $"{nameof(ILRepack)}: Input assemblies (using input assembly wildcards): {string.Join(" ", InputAssemblies.Select(x => x.ItemSpec))}."
                         : $"{nameof(ILRepack)}: Input assemblies ({InputAssemblies.Length}): {string.Join(" ", InputAssemblies.Select(x => x.ItemSpec))}.");
-
+                Directory.CreateDirectory(OutputDirectory);
                 var ilMerger = new ILRepacking.ILRepack(repackOptions, new ILRepackLogger(this)
                 {
                     ShouldLogVerbose = Verbose

@@ -26,6 +26,7 @@
     <IsTestProject>false</IsTestProject>
     <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
     <Platforms>AnyCPU</Platforms>
+    <Version>2.0.14</Version>
   </PropertyGroup>
 
   <ItemGroup>
